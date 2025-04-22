@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StayStable - Cerebellar Rehabilitation</title>
+    <!-- A-Frame for VR functionality -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
+    <!-- Tone.js for audio feedback -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        .instructions {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 999;
+            max-width: 320px;
+        }
+
+        .crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 999;
+            pointer-events: none;
+        }
+
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: white;
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .crosshair::before {
+            width: 2px;
+            height: 20px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .crosshair::after {
+            width: 20px;
+            height: 2px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .data-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 999;
+            min-width: 200px;
+        }
+
+        .point-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 999;
+            text-align: center;
+            opacity: 1;
+            transition: opacity 0.5s;
+        }
+
+        .point-message.fade {
+            opacity: 0;
+        }
+
+        #orientation-message {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .field-of-view {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 110vw;
+            height: 90vh;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 998;
+        }
+
+        .out-of-bounds-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 1.5rem;
+            z-index: 1001;
+            display: none;
+        }
+        
+        .progress-bar {
+            position: fixed;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 999;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #9ACBAF, #678574);
+            transition: width 0.5s;
+        }
+        
+        .session-stats {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 999;
+        }
+        
+        .mode-selector {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 999;
+        }
+        
+        select, button {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+            cursor: pointer;
+        }
+        
+        select:focus, button:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #9ACBAF;
+        }
+        
+        .hotspot {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="orientation-message" style="display: none;">
+        Please rotate your device to landscape mode
+    </div>
+
+    <div class="instructions">
+        <h3>Cerebellar Rehabilitation Exercise</h3>
+        <p>Focus on dots and follow predictive patterns to train your cerebellum.</p>
+        <p>Each successful focus improves motor learning pathways.</p>
+    </div>
+
+    <div class="crosshair"></div>
+    <div class="field-of-view"></div>
+    
+    <div class="data-panel">
+        <div>Score: <span id="score">0</span></div>
+        <div>Focus quality: <span id="focus-quality">0%</span></div>
+        <div>Learning rate: <span id="learning-rate">0%</span></div>
+    </div>
+
+    <div class="progress-bar">
+        <div class="progress-fill"></div>
+    </div>
+
+    <div class="point-message" style="display: none;"></div>
+    <div class="out-of-bounds-message">Return to center position</div>
+    
+    <div class="session-stats">
+        <div>Session time: <span id="session-time">00:00</span></div>
+        <div>Targets hit: <span id="targets-hit">0</span></div>
+    </div>
+    
+    <div class="mode-selector">
+        <select id="training-mode">
+            <option value="pursuit">Pursuit Learning</option>
+            <option value="prediction">Prediction Training</option>
+            <option value="coordination">Coordination Exercise</option>
+        </select>
+        <button id="start-training">Start Training</button>
+    </div>
+
+    <a-scene raycaster="objects: .hotspot; far: 20">
+        <a-camera position="0 1.6 0">
+            <a-entity
+                raycaster="objects: .hotspot; far: 20"
+                position="0 0 -1"
+                geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.02"
+                material="color: white; shader: flat"
+                cursor="fuse: true; fuseTimeout: 1000"
+                visible="false">
+            </a-entity>
+        </a-camera>
+
+        <a-sky src="/api/placeholder/4096/2048" rotation="0 -90 0"></a-sky>
+        <a-entity id="hotspots"></a-entity>
+        <a-entity id="path-indicators"></a-entity>
+    </a-scene>
+
+    <script>
+        // Core settings
+        const CONFIG = {
+            pursuit: {
+                numHotspots: 5,
+                spawnDelay: 2000,
+                minDistance: 3,
+                maxDistance: 6,
+                predictiveMode: false,
+                fuseTimeout: 1000,
+                moveSpeed: 0.02
+            },
+            prediction: {
+                numHotspots: 3,
+                spawnDelay: 3000,
+                minDistance: 2,
+                maxDistance: 5,
+                predictiveMode: true,
+                fuseTimeout: 1500,
+                moveSpeed: 0.03
+            },
+            coordination: {
+                numHotspots: 8,
+                spawnDelay: 1500,
+                minDistance: 2.5,
+                maxDistance: 7,
+                predictiveMode: true,
+                fuseTimeout: 800,
+                moveSpeed: 0.04
+            }
+        };
+        
+        // Current active configuration
+        let ACTIVE_CONFIG = CONFIG.pursuit;
+        
+        // Learning data
+        const LEARNING_DATA = {
+            fastComponent: 0,
+            slowComponent: 0,
+            totalLearning: 0,
+            decayRate: {
+                fast: 0.15,  // 15% decay per trial initially
+                slow: 0.04   // 4% decay per slower component
+            },
+            trials: 0,
+            targetsHit: 0,
+            sessionStartTime: 0,
+            focusQuality: 0
+        };
+
+        // Audio synth setup
+        let synth;
+        let isAudioInitialized = false;
+        
+        function initAudio() {
+            if (isAudioInitialized) return;
+            
+            synth = new Tone.Synth({
+                oscillator: {
+                    type: "sine"
+                },
+                envelope: {
+                    attack: 0.01,
+                    decay: 0.1,
+                    sustain: 0.5,
+                    release: 0.4
+                }
+            }).toDestination();
+            
+            // Feedback audio
+            window.successSound = () => {
+                synth.triggerAttackRelease("C5", "16n");
+                setTimeout(() => synth.triggerAttackRelease("E5", "16n"), 100);
+                setTimeout(() => synth.triggerAttackRelease("G5", "16n"), 200);
+            };
+            
+            window.errorSound = () => {
+                synth.triggerAttackRelease("A3", "16n");
+                setTimeout(() => synth.triggerAttackRelease("G3", "16n"), 150);
+            };
+            
+            window.focusSound = (quality) => {
+                // Maps quality (0-100) to frequency range (C4-C6)
+                const note = 60 + Math.floor(quality / 5); // MIDI note conversion
+                const freq = Tone.Frequency(note, "midi").toFrequency();
+                synth.triggerAttackRelease(freq, "32n");
+            };
+            
+            isAudioInitialized = true;
+        }
+
+        // Main DOM elements
+        const scene = document.querySelector('a-scene');
+        const hotspotsContainer = document.querySelector('#hotspots');
+        const pathIndicators = document.querySelector('#path-indicators');
+        const pointMessage = document.querySelector('.point-message');
+        const orientationMessage = document.getElementById('orientation-message');
+        const outOfBoundsMessage = document.querySelector('.out-of-bounds-message');
+        const progressFill = document.querySelector('.progress-fill');
+        const scoreEl = document.getElementById('score');
+        const focusQualityEl = document.getElementById('focus-quality');
+        const learningRateEl = document.getElementById('learning-rate');
+        const sessionTimeEl = document.getElementById('session-time');
+        const targetsHitEl = document.getElementById('targets-hit');
+        const trainingModeEl = document.getElementById('training-mode');
+        const startTrainingBtn = document.getElementById('start-training');
+
+        // Hotspots tracking
+        let activeHotspots = [];
+        let predictivePattern = [];
+        let learningProgress = 0;
+        let sessionTimer = null;
+        
+        // Initialize the session
+        function initSession() {
+            LEARNING_DATA.sessionStartTime = Date.now();
+            LEARNING_DATA.trials = 0;
+            LEARNING_DATA.targetsHit = 0;
+            LEARNING_DATA.fastComponent = 0;
+            LEARNING_DATA.slowComponent = 0;
+            LEARNING_DATA.totalLearning = 0;
+            LEARNING_DATA.focusQuality = 0;
+            
+            // Clear existing hotspots
+            while (hotspotsContainer.firstChild) {
+                hotspotsContainer.removeChild(hotspotsContainer.firstChild);
+            }
+            
+            while (pathIndicators.firstChild) {
+                pathIndicators.removeChild(pathIndicators.firstChild);
+            }
+            
+            activeHotspots = [];
+            
+            // Update UI
+            updateLearningUI();
+            updateScoreUI();
+            
+            // Start session timer
+            if (sessionTimer) clearInterval(sessionTimer);
+            sessionTimer = setInterval(updateSessionTime, 1000);
+            
+            // Generate initial hotspots
+            for (let i = 0; i < ACTIVE_CONFIG.numHotspots; i++) {
+                setTimeout(() => createHotspot(), i * 500);
+            }
+            
+            // Generate predictive pattern if in predictive mode
+            if (ACTIVE_CONFIG.predictiveMode) {
+                generatePredictivePattern();
+            }
+            
+            // Initialize audio on first user interaction
+            document.addEventListener('click', initAudio, { once: true });
+        }
+        
+        // Generate a predictable pattern for targets
+        function generatePredictivePattern() {
+            predictivePattern = [];
+            
+            // Create a pattern of positions that follows a figure-8 or circular pattern
+            const patternLength = 8;
+            const radius = 3;
+            
+            for (let i = 0; i < patternLength; i++) {
+                const angle = (i / patternLength) * Math.PI * 2;
+                
+                // Figure-8 pattern
+                const x = radius * Math.sin(angle * 2) * 0.7;
+                const y = radius * Math.sin(angle) * 0.3;
+                const z = -radius * 1.5;
+                
+                predictivePattern.push({ x, y, z });
+            }
+            
+            // Visualize the pattern with subtle indicators
+            if (ACTIVE_CONFIG.predictiveMode) {
+                visualizePredictivePattern();
+            }
+        }
+        
+        // Create visual cues for the predictive pattern
+        function visualizePredictivePattern() {
+            predictivePattern.forEach((pos, index) => {
+                const indicator = document.createElement('a-entity');
+                
+                indicator.setAttribute('geometry', {
+                    primitive: 'ring',
+                    radiusInner: 0.05,
+                    radiusOuter: 0.08
+                });
+                
+                indicator.setAttribute('material', {
+                    color: '#9ACBAF',
+                    opacity: 0.3,
+                    transparent: true,
+                    shader: 'flat'
+                });
+                
+                indicator.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+                
+                // Connect with lines to show path
+                if (index > 0) {
+                    const prevPos = predictivePattern[index - 1];
+                    const line = document.createElement('a-entity');
+                    
+                    line.setAttribute('line', {
+                        start: `${prevPos.x} ${prevPos.y} ${prevPos.z}`,
+                        end: `${pos.x} ${pos.y} ${pos.z}`,
+                        color: '#9ACBAF',
+                        opacity: 0.2
+                    });
+                    
+                    pathIndicators.appendChild(line);
+                }
+                
+                pathIndicators.appendChild(indicator);
+            });
+        }
+
+        // Create a new hotspot/target
+        function createHotspot() {
+            const hotspot = document.createElement('a-entity');
+            
+            // Position the hotspot
+            let position;
+            if (ACTIVE_CONFIG.predictiveMode && predictivePattern.length > 0) {
+                // Choose from predictive pattern
+                const patternIndex = Math.floor(Math.random() * predictivePattern.length);
+                position = predictivePattern[patternIndex];
+            } else {
+                // Random position with constraints
+                const x = (Math.random() * 3) - 1.5;
+                const y = (Math.random() * 2) - 0.5;
+                const z = -(Math.random() * (ACTIVE_CONFIG.maxDistance - ACTIVE_CONFIG.minDistance) + ACTIVE_CONFIG.minDistance);
+                position = { x, y, z };
+            }
+            
+            // Determine device type for sizing
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const radius = isMobile ? 0.3 : 0.2;
+            
+            // Configure hotspot appearance
+            hotspot.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+            hotspot.setAttribute('geometry', {
+                primitive: 'sphere',
+                radius: radius
+            });
+            hotspot.setAttribute('material', {
+                shader: 'flat',
+                color: '#9ACBAF',
+                emissive: '#678574',
+                emissiveIntensity: 0.8
+            });
+            hotspot.setAttribute('class', 'hotspot');
+            
+            // Add progress ring for visual feedback
+            const ring = document.createElement('a-entity');
+            ring.setAttribute('geometry', {
+                primitive: 'ring',
+                radiusInner: radius * 1.33,
+                radiusOuter: radius * 1.67
+            });
+            ring.setAttribute('material', {
+                color: '#FFFFFF',
+                opacity: 0.8,
+                transparent: true,
+                side: 'double'
+            });
+            ring.setAttribute('visible', false);
+            hotspot.appendChild(ring);
+            
+            // Tracking data for this hotspot
+            hotspot.dataset.focusStartTime = 0;
+            hotspot.dataset.focusQuality = 0;
+            hotspot.dataset.direction = Math.random() > 0.5 ? 1 : -1;
+            
+            // Event listeners for interaction
+            hotspot.addEventListener('mouseenter', function() {
+                hotspot.dataset.focusStartTime = Date.now();
+                ring.setAttribute('visible', true);
+                
+                // Start progress animation
+                ring.setAttribute('animation', {
+                    property: 'geometry.thetaLength',
+                    dur: ACTIVE_CONFIG.fuseTimeout,
+                    from: 0,
+                    to: 360,
+                    easing: 'linear'
+                });
+            });
+            
+            hotspot.addEventListener('mouseleave', function() {
+                ring.setAttribute('visible', false);
+                ring.removeAttribute('animation');
+                ring.setAttribute('geometry', {
+                    primitive: 'ring',
+                    radiusInner: radius * 1.33,
+                    radiusOuter: radius * 1.67,
+                    thetaLength: 0
+                });
+                
+                // Reset focus quality
+                hotspot.dataset.focusQuality = 0;
+            });
+            
+            hotspot.addEventListener('click', function() {
+                // Calculate focus quality based on how steadily the user maintained focus
+                const focusDuration = Date.now() - parseInt(hotspot.dataset.focusStartTime);
+                const focusQuality = Math.min(100, (focusDuration / ACTIVE_CONFIG.fuseTimeout) * 100);
+                LEARNING_DATA.focusQuality = focusQuality;
+                
+                // Play audio feedback
+                if (isAudioInitialized) {
+                    window.focusSound(focusQuality);
+                    setTimeout(() => window.successSound(), 300);
+                }
+                
+                // Apply learning model
+                updateLearning(focusQuality);
+                
+                // Animate disappearance
+                this.setAttribute('animation', {
+                    property: 'scale',
+                    dur: 500,
+                    to: '0 0 0',
+                    easing: 'easeInOutQuad'
+                });
+                
+                // Remove and create new hotspot
+                setTimeout(() => {
+                    const index = activeHotspots.indexOf(this);
+                    if (index > -1) activeHotspots.splice(index, 1);
+                    
+                    this.parentNode.removeChild(this);
+                    setTimeout(createHotspot, ACTIVE_CONFIG.spawnDelay);
+                    
+                    // Track hits
+                    LEARNING_DATA.targetsHit++;
+                    targetsHitEl.textContent = LEARNING_DATA.targetsHit;
+                    
+                    // Update score
+                    scoreEl.textContent = Math.floor(LEARNING_DATA.totalLearning);
+                    
+                    // Check for milestone
+                    if (LEARNING_DATA.targetsHit % 10 === 0) {
+                        showMilestoneMessage();
+                    }
+                }, 300);
+            });
+            
+            // Add movement behavior
+            if (ACTIVE_CONFIG.predictiveMode) {
+                hotspot.setAttribute('animation', {
+                    property: 'position',
+                    dur: 5000 + Math.random() * 5000,
+                    easing: 'linear',
+                    loop: true,
+                    to: `${position.x + Math.random() - 0.5} ${position.y + Math.random() - 0.5} ${position.z}`
+                });
+            }
+            
+            // Add to scene and tracking array
+            hotspotsContainer.appendChild(hotspot);
+            activeHotspots.push(hotspot);
+            
+            // Update movement behavior on tick
+            hotspot.tick = (time, timeDelta) => {
+                if (!ACTIVE_CONFIG.predictiveMode) return;
+                
+                // Make hotspots move in a more cerebellar-learning relevant way
+                const currentPos = hotspot.getAttribute('position');
+                const speed = ACTIVE_CONFIG.moveSpeed;
+                
+                // Slow sinusoidal movement that requires prediction
+                const dir = parseInt(hotspot.dataset.direction);
+                currentPos.x += Math.sin(time / 1000) * speed * dir;
+                currentPos.y += Math.cos(time / 2000) * speed * dir;
+                
+                hotspot.setAttribute('position', currentPos);
+            };
+        }
+        
+        // Update learning model based on cerebellar research
+        function updateLearning(focusQuality) {
+            // Increase trial count
+            LEARNING_DATA.trials++;
+            
+            // Calculate learning contribution based on focus quality
+            const learningFactor = focusQuality / 100;
+            
+            // Fast component learning (early, quick but with poor retention)
+            // Simulates the initial learning in cerebellar cortex
+            if (LEARNING_DATA.trials < 20) {
+                LEARNING_DATA.fastComponent += (10 * learningFactor);
+            } else {
+                // Apply decay to fast component
+                LEARNING_DATA.fastComponent *= (1 - LEARNING_DATA.decayRate.fast);
+                LEARNING_DATA.fastComponent += (5 * learningFactor);
+            }
+            
+            // Slow component learning (progressive, better retention)
+            // Simulates consolidation in cerebellar nuclei
+            LEARNING_DATA.slowComponent *= (1 - LEARNING_DATA.decayRate.slow);
+            LEARNING_DATA.slowComponent += (2 * learningFactor * Math.log(LEARNING_DATA.trials + 1));
+            
+            // Calculate total learning (weighted sum of both components)
+            LEARNING_DATA.totalLearning = LEARNING_DATA.fastComponent + LEARNING_DATA.slowComponent;
+            
+            // Update learning progress for visual feedback
+            learningProgress = Math.min(100, (LEARNING_DATA.totalLearning / 200) * 100);
+            progressFill.style.width = `${learningProgress}%`;
+            
+            // Update UI
+            updateLearningUI();
+        }
+        
+        // Update UI with learning metrics
+        function updateLearningUI() {
+            focusQualityEl.textContent = `${Math.round(LEARNING_DATA.focusQuality)}%`;
+            
+            // Calculate learning rate as the ratio of slow to fast components
+            const learningRate = LEARNING_DATA.trials > 1 ? 
+                Math.round((LEARNING_DATA.slowComponent / LEARNING_DATA.totalLearning) * 100) : 0;
+            learningRateEl.textContent = `${learningRate}%`;
+        }
+        
+        // Show milestone message
+        function showMilestoneMessage() {
+            // Determine message based on progress
+            let message;
+            
+            if (LEARNING_DATA.targetsHit === 10) {
+                message = "Initial learning phase complete! Your cerebellum is adapting.";
+            } else if (LEARNING_DATA.targetsHit === 25) {
+                message = "Fast learning engaged! Your cerebellar cortex is showing activity.";
+            } else if (LEARNING_DATA.targetsHit === 50) {
+                message = "Consolidation beginning! Memory transferring to cerebellar nuclei.";
+            } else if (LEARNING_DATA.targetsHit === 100) {
+                message = "Excellent progress! Long-term motor learning pathways forming.";
+            } else {
+                message = `${LEARNING_DATA.targetsHit} targets hit! Cerebellar learning is progressing.`;
+            }
+            
+            // Display message
+            pointMessage.textContent = message;
+            pointMessage.style.display = 'block';
+            pointMessage.classList.remove('fade');
+            
+            // Fade out after delay
+            setTimeout(() => {
+                pointMessage.classList.add('fade');
+                setTimeout(() => {
+                    pointMessage.style.display = 'none';
+                }, 500);
+            }, 5000);
+        }
+        
+        // Update session time display
+        function updateSessionTime() {
+            const elapsedSec = Math.floor((Date.now() - LEARNING_DATA.sessionStartTime) / 1000);
+            const minutes = Math.floor(elapsedSec / 60).toString().padStart(2, '0');
+            const seconds = (elapsedSec % 60).toString().padStart(2, '0');
+            sessionTimeEl.textContent = `${minutes}:${seconds}`;
+        }
+        
+        // Update score display
+        function updateScoreUI() {
+            scoreEl.textContent = Math.floor(LEARNING_DATA.totalLearning);
+        }
+        
+        // Check device orientation
+        function checkOrientation() {
+            if (window.innerHeight > window.innerWidth) {
+                orientationMessage.style.display = 'flex';
+                scene.pause();
+            } else {
+                orientationMessage.style.display = 'none';
+                scene.play();
+            }
+        }
+        
+        // Check if gaze is within bounds
+        function checkOutOfBounds() {
+            const camera = document.querySelector('a-camera');
+            const cameraRotation = camera.getAttribute('rotation');
+            
+            const yaw = cameraRotation.y; // Horizontal rotation
+            const pitch = cameraRotation.x; // Vertical rotation
+            
+            const yawLimit = 45; // Horizontal limit
+            const pitchLimit = 30; // Vertical limit
+            
+            if (Math.abs(yaw) > yawLimit || Math.abs(pitch) > pitchLimit) {
+                outOfBoundsMessage.style.display = 'block';
+                if (navigator.vibrate) {
+                    navigator.vibrate(200);
+                }
+                
+                // Penalize learning if out of bounds
+                if (LEARNING_DATA.fastComponent > 0) {
+                    LEARNING_DATA.fastComponent *= 0.95; // Slight penalty
+                    updateLearningUI();
+                }
+            } else {
+                outOfBoundsMessage.style.display = 'none';
+            }
+        }
+        
+        // Change training mode
+        function changeTrainingMode() {
+            const mode = trainingModeEl.value;
+            ACTIVE_CONFIG = CONFIG[mode];
+            
+            // Update instructions based on mode
+            const instructionsEl = document.querySelector('.instructions');
+            
+            switch(mode) {
+                case 'pursuit':
+                    instructionsEl.innerHTML = `
+                        <h3>Pursuit Learning Exercise</h3>
+                        <p>Focus on dots and track them carefully to train smooth pursuit pathways.</p>
+                    `;
+                    break;
+                case 'prediction':
+                    instructionsEl.innerHTML = `
+                        <h3>Prediction Training Exercise</h3>
+                        <p>Anticipate target movements before they occur to enhance predictive motor learning.</p>
+                    `;
+                    break;
+                case 'coordination':
+                    instructionsEl.innerHTML = `
+                        <h3>Coordination Exercise</h3>
+                        <p>Track multiple moving targets to improve complex cerebellar coordination pathways.</p>
+                    `;
+                    break;
+            }
+        }
+        
+        // Event listeners
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+        trainingModeEl.addEventListener('change', changeTrainingMode);
+        startTrainingBtn.addEventListener('click', () => {
+            initSession();
+            // Initialize audio on user interaction
+            initAudio();
+        });
+        
+        // Regular checks
+        setInterval(checkOutOfBounds, 100);
+        
+        // Initialize scene
+        scene.addEventListener('loaded', () => {
+            checkOrientation();
+            changeTrainingMode();
+        });
+    </script>
+</body>
+</html>
